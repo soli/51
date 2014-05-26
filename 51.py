@@ -45,25 +45,38 @@ class Player():
         return cards_to_str(self.cards)
 
     def play(self, heap, new):
-        print(self)
-        select = self.select(heap)
+        # print(self)
+        select, val = self.select(heap)
         card, self.cards[select] = self.cards[select], new
-        print(self)
+        # print(self)
         print(card_to_str(card), end=' ')
-        val = values[card % 8]
-        if isinstance(val, list):
-            val = random.choice(val)
         return val
 
     def select(self, heap):
-        return random.randrange(NCARDS)
+        select = random.randrange(NCARDS)
+        val = values[self.cards[select] % 8]
+        if isinstance(val, list):
+            val = random.choice(val)
+        return select, val
+
+
+class HumanPlayer(Player):
+    def select(self, heap):
+        print(self)
+        for i in range(NCARDS):
+            print(' ' + str(i + 1), end=' ')
+        select = int(input('-> ')) - 1
+        val = values[self.cards[select] % 8]
+        if isinstance(val, list):
+            val = int(input('with which value ' + str(val) + ': '))
+        return select, val
 
 
 class Game():
     def __init__(self):
         self.heap = 0
         self.deck = Deck()
-        self.players = [Player(self.deck), Player(self.deck)]
+        self.players = [Player(self.deck), HumanPlayer(self.deck)]
         print(self.deck)
 
     def play(self):
