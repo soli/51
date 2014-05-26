@@ -1,8 +1,10 @@
 import random
 
 
-values = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
+faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
 colors = ['C', 'H', 'S', 'D']
+values = [7, 8, 0, [-10, 10], 2, 3, 4, [1, 11]]
+NCARDS = 5
 
 
 class Deck():
@@ -16,16 +18,18 @@ class Deck():
         return ' ' + cards_to_str(self.cards) + '\n' + \
             (3 * self.drawn) * ' ' + '^'
 
-    def draw(self, n):
+    def draw(self, n=1):
         if n + self.drawn > 32:
-            raise Exception('the deck is now empty, the game is drawn')
+            raise Exception('the deck is empty, cannot draw')
         index = self.drawn
         self.drawn += n
-        return self.cards[index:self.drawn]
+        if n > 1:
+            return self.cards[index:self.drawn]
+        return self.cards[index]
 
 
 def card_to_str(card):
-    return values[card % 8] + colors[card // 8]
+    return faces[card % 8] + colors[card // 8]
 
 
 def cards_to_str(cards):
@@ -34,19 +38,51 @@ def cards_to_str(cards):
 
 class Player():
     def __init__(self, deck):
-        self.cards = deck.draw(5)
+        self.cards = deck.draw(NCARDS)
         print(self)
 
     def __str__(self):
         return cards_to_str(self.cards)
 
+    def play(self, heap, new):
+        print(self)
+        select = self.select(heap)
+        card, self.cards[select] = self.cards[select], new
+        print(self)
+        print(card_to_str(card), end=' ')
+        val = values[card % 8]
+        if isinstance(val, list):
+            val = random.choice(val)
+        return val
 
-def main():
-    deck = Deck()
-    Player(deck)
-    Player(deck)
-    print(deck)
+    def select(self, heap):
+        return random.randrange(NCARDS)
+
+
+class Game():
+    def __init__(self):
+        self.heap = 0
+        self.deck = Deck()
+        self.players = [Player(self.deck), Player(self.deck)]
+        print(self.deck)
+
+    def play(self):
+        current = 0
+        while self.deck.drawn < 32 and self.heap < 51:
+            self.heap += self.players[current].play(self.heap,
+                                                    self.deck.draw(1))
+            print(self.heap)
+            current = (current + 1) % len(self.players)
+        if self.deck.drawn >= 32:
+            print('deck is empty, game is a draw')
+            return
+        last_player = (current - 1) % len(self.players)
+        if self.heap > 51:
+            print('player ' + str(last_player) + ' has lost')
+            return
+        print('player ' + str(last_player) + ' has won')
+        return
 
 
 if __name__ == '__main__':
-    main()
+    Game().play()
