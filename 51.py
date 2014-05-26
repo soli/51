@@ -12,7 +12,7 @@ class Deck():
         self.drawn = 0
         self.cards = list(range(32))
         random.shuffle(self.cards)
-        print(self)
+        # print(self)
 
     def __str__(self):
         return ' ' + cards_to_str(self.cards) + '\n' + \
@@ -49,9 +49,14 @@ class Player():
         select, val = self.select(heap)
         card, self.cards[select] = self.cards[select], new
         # print(self)
-        print(card_to_str(card), end=' ')
+        print(card_to_str(card), end=' ')   # noqa
         return val
 
+    def select(self, heap):
+        raise NotImplementedError('Default player is abstract')
+
+
+class RandomPlayer(Player):
     def select(self, heap):
         select = random.randrange(NCARDS)
         val = values[self.cards[select] % 8]
@@ -72,12 +77,25 @@ class HumanPlayer(Player):
         return select, val
 
 
+class WeakAI(Player):
+    def select(self, heap):
+        options = []
+        for select in range(NCARDS):
+            val = values[self.cards[select] % 8]
+            if isinstance(val, list):
+                options.extend([(select, v) for v in val])
+            else:
+                options.append((select, val))
+        print(options)
+        return(options[0])
+
+
 class Game():
     def __init__(self):
         self.heap = 0
         self.deck = Deck()
-        self.players = [Player(self.deck), HumanPlayer(self.deck)]
-        print(self.deck)
+        self.players = [WeakAI(self.deck), HumanPlayer(self.deck)]
+        # print(self.deck)
 
     def play(self):
         current = 0
