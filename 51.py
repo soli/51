@@ -78,16 +78,41 @@ class HumanPlayer(Player):
 
 
 class WeakAI(Player):
+    # values that can lead to a 1-move win
+    unsafe_values = [50, 49, 48, 47, 44, 43, 41, 40]
+
     def select(self, heap):
-        options = []
+        options = {}
         for select in range(NCARDS):
             val = values[self.cards[select] % 8]
+            # FIXME handle duplicates
             if isinstance(val, list):
-                options.extend([(select, v) for v in val])
+                options.update([(v + heap, select) for v in val])
             else:
-                options.append((select, val))
+                options[val + heap] = select
+        print(self)
         print(options)
-        return(options[0])
+
+        # can we win?
+        if 51 in options:
+            return (options[51], 51 - heap)
+
+        # can we avoid to lose?
+        nolose = {k:v for k, v in options.items() if k < 52}
+        if nolose:
+            options = nolose
+        # we could have an else to return random immediately but it does not
+        # matter that much
+
+        # can we be safe
+        safe = {k:v for k, v in options.items() if k not in self.unsafe_values}
+        if safe:
+            options = safe
+
+        # just be random
+        print(options)
+        foo = options.popitem()
+        return (foo[1], foo[0] - heap)
 
 
 class Game():
