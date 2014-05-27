@@ -13,7 +13,7 @@ class Deck():
         self.drawn = 0
         self.cards = list(range(32))
         random.shuffle(self.cards)
-        logging.debug(self)
+        logging.debug('deck:\n' + str(self))
 
     def __str__(self):
         return ' ' + cards_to_str(self.cards) + '\n' + \
@@ -40,16 +40,16 @@ def cards_to_str(cards):
 class Player():
     def __init__(self, deck):
         self.cards = deck.draw(NCARDS)
-        print(self)
+        logging.debug('initial hand: ' + str(self))
 
     def __str__(self):
         return cards_to_str(self.cards)
 
     def play(self, heap, new):
-        logging.debug(self)
+        logging.debug('hand before play: ' + str(self))
         select, val = self.select(heap)
         card, self.cards[select] = self.cards[select], new
-        logging.debug(self)
+        logging.debug('hand after play: ' + str(self))
         print(card_to_str(card), end=' ')   # noqa
         return val
 
@@ -69,12 +69,23 @@ class RandomPlayer(Player):
 class HumanPlayer(Player):
     def select(self, heap):
         print(self)
-        for i in range(NCARDS):
-            print(' ' + str(i + 1), end=' ')
-        select = int(input('-> ')) - 1
+        select = -1
+        while select < 0 or select > 4:
+            for i in range(NCARDS):
+                print(' ' + str(i + 1), end=' ')
+            try:
+                select = int(input('-> ')) - 1
+            except ValueError:
+                select = -1
         val = values[self.cards[select] % 8]
         if isinstance(val, list):
-            val = int(input('with which value ' + str(val) + ': '))
+            v = -1
+            while v not in val:
+                try:
+                    v = int(input('with which value ' + str(val) + ': '))
+                except ValueError:
+                    v = -1
+            val = v
         return select, val
 
 
@@ -91,8 +102,8 @@ class WeakAI(Player):
                 options.update([(v + heap, select) for v in val])
             else:
                 options[val + heap] = select
-        logging.debug(self)
-        logging.debug(options)
+        logging.debug('full hand: ' + str(self))
+        logging.debug('corresponding options: ' + str(options))
 
         # can we win?
         if 51 in options:
@@ -111,7 +122,7 @@ class WeakAI(Player):
             options = safe
 
         # just be random
-        logging.debug(options)
+        logging.debug('remaining options: ' + str(options))
         foo = options.popitem()
         return (foo[1], foo[0] - heap)
 
@@ -122,12 +133,12 @@ def main():
     heap = 0
     deck = Deck()
     players = [WeakAI(deck), HumanPlayer(deck)]
-    logging.debug(deck)
+    logging.debug('deck after initial draw: ' + str(deck))
 
     current = 0
     while deck.drawn < 32 and heap < 51:
         heap += players[current].play(heap, deck.draw(1))
-        logging.debug(heap)
+        print(heap)
         current = (current + 1) % len(players)
     if deck.drawn >= 32:
         print('deck is empty, game is a draw')
