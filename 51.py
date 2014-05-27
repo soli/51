@@ -1,4 +1,5 @@
 import random
+import logging
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -12,7 +13,7 @@ class Deck():
         self.drawn = 0
         self.cards = list(range(32))
         random.shuffle(self.cards)
-        # print(self)
+        logging.debug(self)
 
     def __str__(self):
         return ' ' + cards_to_str(self.cards) + '\n' + \
@@ -45,10 +46,10 @@ class Player():
         return cards_to_str(self.cards)
 
     def play(self, heap, new):
-        # print(self)
+        logging.debug(self)
         select, val = self.select(heap)
         card, self.cards[select] = self.cards[select], new
-        # print(self)
+        logging.debug(self)
         print(card_to_str(card), end=' ')   # noqa
         return val
 
@@ -90,8 +91,8 @@ class WeakAI(Player):
                 options.update([(v + heap, select) for v in val])
             else:
                 options[val + heap] = select
-        print(self)
-        print(options)
+        logging.debug(self)
+        logging.debug(options)
 
         # can we win?
         if 51 in options:
@@ -110,35 +111,34 @@ class WeakAI(Player):
             options = safe
 
         # just be random
-        print(options)
+        logging.debug(options)
         foo = options.popitem()
         return (foo[1], foo[0] - heap)
 
 
-class Game():
-    def __init__(self):
-        self.heap = 0
-        self.deck = Deck()
-        self.players = [WeakAI(self.deck), HumanPlayer(self.deck)]
-        # print(self.deck)
+def main():
+    # logging.basicConfig(level=logging.DEBUG)
 
-    def play(self):
-        current = 0
-        while self.deck.drawn < 32 and self.heap < 51:
-            self.heap += self.players[current].play(self.heap,
-                                                    self.deck.draw(1))
-            print(self.heap)
-            current = (current + 1) % len(self.players)
-        if self.deck.drawn >= 32:
-            print('deck is empty, game is a draw')
-            return
-        last_player = (current - 1) % len(self.players)
-        if self.heap > 51:
-            print('player ' + str(last_player) + ' has lost')
-            return
-        print('player ' + str(last_player) + ' has won')
+    heap = 0
+    deck = Deck()
+    players = [WeakAI(deck), HumanPlayer(deck)]
+    logging.debug(deck)
+
+    current = 0
+    while deck.drawn < 32 and heap < 51:
+        heap += players[current].play(heap, deck.draw(1))
+        logging.debug(heap)
+        current = (current + 1) % len(players)
+    if deck.drawn >= 32:
+        print('deck is empty, game is a draw')
         return
+    last_player = (current - 1) % len(players)
+    if heap > 51:
+        print('player ' + str(last_player) + ' has lost')
+        return
+    print('player ' + str(last_player) + ' has won')
+    return
 
 
 if __name__ == '__main__':
-    Game().play()
+    main()
