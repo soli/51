@@ -144,6 +144,10 @@ class WeakAI(Player):
 def main():
     # logging.basicConfig(level=logging.DEBUG)
 
+    print('Cards\' values:')
+    print('7 = 7, 8 = 8, 9 = 0, T = 10 or -10, J = 2, Q = 3, K= 4, A = 1 or 11')
+    print()
+
     heap = 0
     deck = Deck()
     players = [WeakAI(deck), HumanPlayer(deck)]
