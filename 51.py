@@ -94,37 +94,51 @@ class WeakAI(Player):
     unsafe_values = [50, 49, 48, 47, 44, 43, 41, 40]
 
     def select(self, heap):
-        options = {}
+        options = []
         for select in range(NCARDS):
             val = values[self.cards[select] % 8]
             # FIXME handle duplicates
             if isinstance(val, list):
-                options.update([(v + heap, select) for v in val])
+                options.extend([(v + heap, select) for v in val])
             else:
-                options[val + heap] = select
+                options.append((val + heap, select))
         logging.debug('full hand: ' + str(self))
         logging.debug('corresponding options: ' + str(options))
 
         # can we win?
-        if 51 in options:
-            return (options[51], 51 - heap)
+        win = [(k, v) for k, v in options if k == 51]
+        if win:
+            options = win
+        # we could return here...
 
         # can we avoid to lose?
-        nolose = {k:v for k, v in options.items() if k < 52}
+        nolose = [(k, v) for k, v in options if k < 52]
         if nolose:
             options = nolose
         # we could have an else to return random immediately but it does not
         # matter that much
 
         # can we be safe
-        safe = {k:v for k, v in options.items() if k not in self.unsafe_values}
+        safe = [(k, v) for k, v in options if k not in self.unsafe_values]
         if safe:
             options = safe
 
-        # just be random
+        # are there duplicates (they do not bring anything)
+        uniques = list(dict(options).items())
+        dups = [(k, v) for k, v in options if (k, v) not in uniques]
+        if dups:
+            options = dups
+
+        # are there single value cards (less useful than double ones)
+        single_vals = [v + heap for v in values if isinstance(v, int)]
+        singles = [(k, v) for k, v in options if k in single_vals]
+        if singles:
+            options = singles
+
+        # just take highest
+        options.sort(reverse=True)
         logging.debug('remaining options: ' + str(options))
-        foo = options.popitem()
-        return (foo[1], foo[0] - heap)
+        return (options[0][1], options[0][0] - heap)
 
 
 def main():
@@ -139,6 +153,7 @@ def main():
     while deck.drawn < 32 and heap < 51:
         heap += players[current].play(heap, deck.draw(1))
         print(heap)
+        print()
         current = (current + 1) % len(players)
     if deck.drawn >= 32:
         print('deck is empty, game is a draw')
