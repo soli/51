@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import random
 import logging
+import argparse
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -58,7 +59,7 @@ class Player():
         raise NotImplementedError('Default player is abstract')
 
 
-class RandomPlayer(Player):
+class Random(Player):
     def select(self, heap):
         select = random.randrange(NCARDS)
         val = values[self.cards[select] % 8]
@@ -67,7 +68,7 @@ class RandomPlayer(Player):
         return select, val
 
 
-class HumanPlayer(Player):
+class Human(Player):
     def select(self, heap):
         print(self)
         select = -1
@@ -176,17 +177,18 @@ class WeakAI(Player):
         return (options[0][1], options[0][0] - heap)
 
 
-def main():
-    # logging.basicConfig(level=logging.DEBUG)
+def get_subclasses(cls):
+    for c in cls.__subclasses__():
+        yield(c.__name__)
+        get_subclasses(c)
 
-    print('Cards\' values:')
-    print(
-        '7 = 7, 8 = 8, 9 = 0, T = 10 or -10, J = 2, Q = 3, K = 4, A = 1 or 11')
-    print()
 
+def game(player1, player2):
     heap = 0
     deck = Deck()
-    players = [WeakAI(deck), HumanPlayer(deck)]
+    # create instances corresponding to the class names given as arguments
+    players = [globals()[player1](deck),
+               globals()[player2](deck)]
     logging.debug('deck after initial draw: ' + str(deck))
 
     current = 0
@@ -197,13 +199,45 @@ def main():
         current = (current + 1) % len(players)
     if deck.drawn >= 32:
         print('deck is empty, game is a draw')
-        return 0
+        return 2
     last_player = (current - 1) % len(players) + 1
     if heap > 51:
         print('player ' + str(last_player) + ' has lost')
         return current
     print('player ' + str(last_player) + ' has won')
-    return last_player
+    return 1 - current
+
+
+def main():
+    # get all known players by introspection
+    possible_players = list(get_subclasses(Player))
+
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('-d', '--debug', help='show (a lot of) debug output',
+                        action='store_true')
+    parser.add_argument('-n', '--count', type=int, default=1,
+                        help='number of games to play (alternating starts)')
+    parser.add_argument('players', nargs=2, help='type of players one and two',
+                        choices=possible_players)
+
+    args = parser.parse_args()
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    print('Cards\' values:')
+    print(
+        '7 = 7, 8 = 8, 9 = 0, T = 10 or -10, J = 2, Q = 3, K = 4, A = 1 or 11')
+    print()
+
+    won = [0, 0, 0]
+    for i in range(args.count):
+        j = i % 2
+        result = game(args.players[i], args.players[1 - i])
+        if result < 2 and j == 1:
+            result = 1 - result
+        won[result] += 1
+
+    print(won)
 
 
 if __name__ == '__main__':
