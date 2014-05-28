@@ -100,14 +100,49 @@ class WeakAI(Player):
             elif v > 0:
                 self.unsafe_values.append(51 - v)
         self.unsafe_values.sort(reverse=True)
-        print(self.unsafe_values)
+        logging.debug('Unsafe values: ' + str(self.unsafe_values))
         # assert self.unsafe_values == [50, 49, 48, 47, 44, 43, 41, 40]
 
+    def filter_options(self, options, func):
+        filtered = [(k, v) for k, v in options if func(k, v)]
+        if filtered:
+            # options = filtered
+            options.clear()
+            options.extend(filtered)
+
+    def filter_win(self, options):
+        self.filter_options(options, lambda k,v: k == 51)
+
+    def filter_nolose(self, options):
+        self.filter_options(options, lambda k,v: k < 52)
+
+    def filter_safe(self, options):
+        self.filter_options(options, lambda k,v: k not in self.unsafe_values)
+
+    def filter_duplicates(self, options):
+        uniques = list(dict(options).items())
+        self.filter_options(options, lambda k,v: (k, v) not in uniques)
+
+    def filter_singlevalued(self, options, heap):
+        # FIXME should be computed directly from options not using heap
+        single_vals = [v + heap for v in values if isinstance(v, int)]
+        self.filter_options(options, lambda k,v: k in single_vals)
+
     def select(self, heap):
+        '''Implements a 1-ply lookahead
+
+        The evaluation function is defined by lexical ordering:
+        - move can win
+        - move can avoid to lose
+        - move is safe (opponent cannot win in 1 move)
+        - twice or more the same card
+        - cards with a single value
+        - cards with highest value
+
+        This ordering is implemented by successive filtering.'''
         options = []
         for select in range(NCARDS):
             val = values[self.cards[select] % 8]
-            # FIXME handle duplicates
             if isinstance(val, list):
                 options.extend([(v + heap, select) for v in val])
             else:
@@ -116,37 +151,26 @@ class WeakAI(Player):
         logging.debug('corresponding options: ' + str(options))
 
         # can we win?
-        win = [(k, v) for k, v in options if k == 51]
-        if win:
-            options = win
+        self.filter_win(options)
         # we could return here...
 
         # can we avoid to lose?
-        nolose = [(k, v) for k, v in options if k < 52]
-        if nolose:
-            options = nolose
+        self.filter_nolose(options)
         # we could have an else to return random immediately but it does not
         # matter that much
 
         # can we be safe
-        safe = [(k, v) for k, v in options if k not in self.unsafe_values]
-        if safe:
-            options = safe
+        self.filter_safe(options)
 
         # are there duplicates (they do not bring anything)
-        uniques = list(dict(options).items())
-        dups = [(k, v) for k, v in options if (k, v) not in uniques]
-        if dups:
-            options = dups
+        self.filter_duplicates(options)
 
         # are there single value cards (less useful than double ones)
-        single_vals = [v + heap for v in values if isinstance(v, int)]
-        singles = [(k, v) for k, v in options if k in single_vals]
-        if singles:
-            options = singles
+        self.filter_singlevalued(options, heap)
 
         # just take highest
         options.sort(reverse=True)
+
         logging.debug('remaining options: ' + str(options))
         return (options[0][1], options[0][0] - heap)
 
@@ -155,7 +179,8 @@ def main():
     # logging.basicConfig(level=logging.DEBUG)
 
     print('Cards\' values:')
-    print('7 = 7, 8 = 8, 9 = 0, T = 10 or -10, J = 2, Q = 3, K= 4, A = 1 or 11')
+    print(
+        '7 = 7, 8 = 8, 9 = 0, T = 10 or -10, J = 2, Q = 3, K = 4, A = 1 or 11')
     print()
 
     heap = 0
