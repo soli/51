@@ -90,8 +90,18 @@ class HumanPlayer(Player):
 
 
 class WeakAI(Player):
-    # values that can lead to a 1-move win
-    unsafe_values = [50, 49, 48, 47, 44, 43, 41, 40]
+    def __init__(self, deck):
+        super().__init__(deck)
+        # values that can lead to a 1-move win
+        self.unsafe_values = []
+        for v in values:
+            if isinstance(v, list):
+                self.unsafe_values.extend([51 - val for val in v if val > 0])
+            elif v > 0:
+                self.unsafe_values.append(51 - v)
+        self.unsafe_values.sort(reverse=True)
+        print(self.unsafe_values)
+        # assert self.unsafe_values == [50, 49, 48, 47, 44, 43, 41, 40]
 
     def select(self, heap):
         options = []
