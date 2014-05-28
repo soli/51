@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import random
 import logging
 
@@ -111,22 +112,22 @@ class WeakAI(Player):
             options.extend(filtered)
 
     def filter_win(self, options):
-        self.filter_options(options, lambda k,v: k == 51)
+        self.filter_options(options, lambda k, v: k == 51)
 
     def filter_nolose(self, options):
-        self.filter_options(options, lambda k,v: k < 52)
+        self.filter_options(options, lambda k, v: k < 52)
 
     def filter_safe(self, options):
-        self.filter_options(options, lambda k,v: k not in self.unsafe_values)
+        self.filter_options(options, lambda k, v: k not in self.unsafe_values)
 
     def filter_duplicates(self, options):
         uniques = list(dict(options).items())
-        self.filter_options(options, lambda k,v: (k, v) not in uniques)
+        self.filter_options(options, lambda k, v: (k, v) not in uniques)
 
     def filter_singlevalued(self, options, heap):
         # FIXME should be computed directly from options not using heap
         single_vals = [v + heap for v in values if isinstance(v, int)]
-        self.filter_options(options, lambda k,v: k in single_vals)
+        self.filter_options(options, lambda k, v: k in single_vals)
 
     def select(self, heap):
         '''Implements a 1-ply lookahead
@@ -196,13 +197,13 @@ def main():
         current = (current + 1) % len(players)
     if deck.drawn >= 32:
         print('deck is empty, game is a draw')
-        return
-    last_player = (current - 1) % len(players)
+        return 0
+    last_player = (current - 1) % len(players) + 1
     if heap > 51:
         print('player ' + str(last_player) + ' has lost')
-        return
+        return current
     print('player ' + str(last_player) + ' has won')
-    return
+    return last_player
 
 
 if __name__ == '__main__':
