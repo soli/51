@@ -81,17 +81,6 @@ class Player():
         pass
 
 
-class Random(Player):
-    # Random vs. Random
-    # about 50-40-10
-    def select(self, heap):
-        select = random.randrange(NCARDS)
-        val = values[self.cards[select] % 8]
-        if isinstance(val, list):
-            val = random.choice(val)
-        return select, val
-
-
 class Human(Player):
     def select(self, heap):
         print(self)
@@ -112,6 +101,17 @@ class Human(Player):
                 except ValueError:
                     v = -1
             val = v
+        return select, val
+
+
+class RandomAI(Player):
+    # Random vs. Random
+    # about 50-40-10
+    def select(self, heap):
+        select = random.randrange(NCARDS)
+        val = values[self.cards[select] % 8]
+        if isinstance(val, list):
+            val = random.choice(val)
         return select, val
 
 
@@ -182,6 +182,13 @@ class WeakAI(Player):
         - cards with highest value
 
         This ordering is implemented by successive filtering.'''
+        # vs. WeakAI
+        # - without options.sort()
+        # about 12-23-65
+        # - without filter_singlevalued()
+        # about 35-45-20
+        # - without filter_duplicates()
+        # about 20-26-54
         options = self.build_options(heap)
 
         # can we win?
@@ -203,29 +210,6 @@ class WeakAI(Player):
         self.filter_singlevalued(options, heap)
 
         # just take highest
-        options.sort(reverse=True)
-
-        logging.debug('remaining options: ' + str(options))
-        return (options[0][1], options[0][0] - heap)
-
-
-class WeakerAI(WeakAI):
-    # WeakerAI vs. WeakAI
-    # - without options.sort()
-    # about 12-23-65
-    # - without filter_singlevalued()
-    # about 35-45-20
-    # - without filter_duplicates()
-    # WeakerAI vs. WeakAI
-    # about 20-26-54
-    def select(self, heap):
-        '''Same as WeakAI without some filters'''
-        options = self.build_options(heap)
-        self.filter_win(options)
-        self.filter_nolose(options)
-        self.filter_safe(options)
-        self.filter_duplicates(options)
-        self.filter_singlevalued(options, heap)
         options.sort(reverse=True)
 
         logging.debug('remaining options: ' + str(options))
@@ -275,6 +259,34 @@ class StrongerAI(StrongAI):
             options.extend([(k, v) for k, v, s in reasons if s == most])
 
 
+class DefenseAI(StrongerAI):
+    '''a bit more conservative about keeping duplicate 9s and Ts'''
+    # vs. WeakAI
+    # about 36-16-48
+    # vs. StrongerAI
+    # about 26-24-50
+    def filter_duplicates_offensive(self, options, heap):
+        # try to save 9s and Ts as they have strong defensive value
+        uniques = list(dict(options).items())
+        self.filter_options(options, lambda k, v: (k, v) not in uniques
+                            and k not in [heap - 10, heap, heap + 10])
+
+    def select(self, heap):
+        '''Same as WeakAI but try to keep 9s and Ts'''
+        options = self.build_options(heap)
+        self.filter_win(options)
+        self.filter_nolose(options)
+        self.filter_safe(options)
+
+        self.filter_duplicates_offensive(options, heap)
+
+        self.filter_singlevalued(options, heap)
+        options.sort(reverse=True)
+
+        logging.debug('remaining options: ' + str(options))
+        return (options[0][1], options[0][0] - heap)
+
+
 def value_to_card(value):
     for i, v in enumerate(values):
         if isinstance(v, list):
@@ -320,7 +332,9 @@ def main():
     # get all known players by introspection
     possible_players = list(get_subclasses(Player))
 
-    parser = argparse.ArgumentParser(description='')
+    with open('README.md') as f:
+        long_descr = f.read()
+    parser = argparse.ArgumentParser(description=long_descr)
     parser.add_argument('-d', '--debug', help='show (a lot of) debug output',
                         action='store_true')
     parser.add_argument('-n', '--count', type=int, default=1,
