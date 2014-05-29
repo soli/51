@@ -6,9 +6,11 @@ import sys
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
-colors = ['C', 'H', 'S', 'D']
+colors = ['S', 'H', 'D', 'C']
+ucolors = ['♠', '♥', '♦', '♣']
 values = [7, 8, 0, [-10, 10], 2, 3, 4, [1, 11]]
 NCARDS = 5
+want_unicode = 0
 
 
 class Deck():
@@ -33,7 +35,18 @@ class Deck():
 
 
 def card_to_str(card):
-    return faces[card % 8] + colors[card // 8]
+    color = card // 8
+    face = card % 8
+    if want_unicode == 2:
+        # U+1FOA1 is Ace of Spades B1, Hearts...
+        base = 0x1F0A7 + 0x10 * color + face
+        # Ace is lowest not highest
+        if face == 7:
+            base -= 13
+        return ' ' + chr(base)
+    if want_unicode == 1:
+        return faces[face] + ucolors[color]
+    return faces[face] + colors[color]
 
 
 def cards_to_str(cards):
@@ -263,15 +276,15 @@ def game(player1, player2):
     while deck.drawn < 32 and heap < 51:
         heap, last_card = players[current].play(heap, last_card, deck.draw(1))
         current = (current + 1) % 2
-    if deck.drawn >= 32:
-        print('deck is empty, game is a draw')
-        return 2
     last_player = (current - 1) % 2 + 1
+    if heap == 51:
+        print('player ' + str(last_player) + ' has won')
+        return 1 - current
     if heap > 51:
         print('player ' + str(last_player) + ' has lost')
         return current
-    print('player ' + str(last_player) + ' has won')
-    return 1 - current
+    print('deck is empty, game is a draw')
+    return 2
 
 
 def main():
@@ -283,6 +296,9 @@ def main():
                         action='store_true')
     parser.add_argument('-n', '--count', type=int, default=1,
                         help='number of games to play (alternating starts)')
+    parser.add_argument('-u', '--unicode', type=int, default=1,
+                        help='Use ASCII, two unicode chars or a single' +
+                        ' unicode char')
     parser.add_argument('players', nargs=2, help='type of players one and two',
                         choices=possible_players)
 
@@ -295,6 +311,9 @@ def main():
         print('7 = 7, 8 = 8, 9 = 0, T = 10 or -10, J = 2, Q = 3, K = 4, ' +
               'A = 1 or 11')
         print()
+
+    global want_unicode
+    want_unicode = args.unicode
 
     won = [0, 0, 0]
     for i in range(args.count):
