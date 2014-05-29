@@ -257,6 +257,35 @@ class StrongAI(WeakAI):
             self.unsafe_values.remove(51 - val)
 
 
+class StrongerAI(StrongAI):
+    '''uses seen cards to choose between unsafe plays'''
+    # vs. WeakAI
+    # about 36-22-42
+    # vs. StrongAI
+    # about 31-28-41
+    def filter_safe(self, options):
+        super().filter_safe(options)
+        if options[0][0] in self.unsafe_values and len(options) > 1:
+            # we have to choose one of the unsafe moves
+            reasons = [(k, v, self.seen[value_to_card(51 - k)])
+                       for k, v in options]
+            logging.debug('options with seen numbers: ' + str(reasons))
+            _, _, most = max(reasons, key=lambda x: x[2])
+            options.clear()
+            options.extend([(k, v) for k, v, s in reasons if s == most])
+
+
+def value_to_card(value):
+    for i, v in enumerate(values):
+        if isinstance(v, list):
+            for vv in v:
+                if vv == value:
+                    return i
+        else:
+            if v == value:
+                return i
+
+
 def get_subclasses(cls):
     for c in cls.__subclasses__():
         yield(c.__name__)
