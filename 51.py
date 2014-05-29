@@ -57,6 +57,8 @@ class Player():
         logging.debug('hand after play: ' + str(self))
         self.mark_seen(new)
         print(card_to_str(card), end=' ')   # noqa
+        print(heap + val)
+        print()
         return heap + val, card
 
     def select(self, heap):
@@ -260,8 +262,6 @@ def game(player1, player2):
     current = 0
     while deck.drawn < 32 and heap < 51:
         heap, last_card = players[current].play(heap, last_card, deck.draw(1))
-        print(heap)
-        print()
         current = (current + 1) % len(players)
     if deck.drawn >= 32:
         print('deck is empty, game is a draw')
