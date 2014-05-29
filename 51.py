@@ -43,7 +43,7 @@ def card_to_str(card):
         # Ace is lowest not highest
         if face == 7:
             base -= 13
-        return ' ' + chr(base)
+        return chr(base) + ' '
     if want_unicode == 1:
         return faces[face] + ucolors[color]
     return faces[face] + colors[color]
