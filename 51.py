@@ -262,11 +262,11 @@ def game(player1, player2):
     current = 0
     while deck.drawn < 32 and heap < 51:
         heap, last_card = players[current].play(heap, last_card, deck.draw(1))
-        current = (current + 1) % len(players)
+        current = (current + 1) % 2
     if deck.drawn >= 32:
         print('deck is empty, game is a draw')
         return 2
-    last_player = (current - 1) % len(players) + 1
+    last_player = (current - 1) % 2 + 1
     if heap > 51:
         print('player ' + str(last_player) + ' has lost')
         return current
