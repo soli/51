@@ -241,6 +241,21 @@ class StrongAI(WeakAI):
             self.unsafe_values.remove(51 - val)
 
 
+class MonteCarloAI(StrongAI):
+    def build_unseen_deck(self):
+        deck = list(range(32))
+        for v in range(8):
+            for i in range(self.seen[v]):
+                deck.remove(v + 8 * i)
+        random.shuffle(deck)
+        return deck
+
+    def select(self, heap):
+        s, v = super().select(heap)
+        print(cards_to_str(self.build_unseen_deck()))
+        return s, v
+
+
 class StrongerAI(StrongAI):
     '''uses seen cards to choose between unsafe plays'''
     # vs. WeakAI
