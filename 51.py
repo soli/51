@@ -316,6 +316,9 @@ class MonteCarloAI(StrongerAI):
         return deck
 
     def select(self, heap):
+        # if heap <= 28:
+        #     return super().select(heap)
+
         options = self.build_options(heap)
         self.filter_win(options)
         self.filter_nolose(options)
@@ -330,14 +333,14 @@ class MonteCarloAI(StrongerAI):
         result = [None] * len(options)
         for i in range(len(options)):
             result[i] = [0, 0, 0]
+            new_heap = options[i][0]
+            select = options[i][1]
+            last_card = self.cards[select]
+            new_cards = self.cards[:]
             for j in range(100):
                 unseen = ref_unseen[:]
                 random.shuffle(unseen)
-                select = options[i][1]
-                last_card = self.cards[select]
-                new_cards = self.cards[:]
                 new_cards[select] = unseen[0]
-                new_heap = options[i][0]
                 logging.debug(cards_to_str(unseen))
                 plyr1 = WeakerAI(self.unsafe_values, new_cards)
                 plyr2 = WeakerAI(self.unsafe_values, unseen[1:6])
@@ -353,7 +356,6 @@ class MonteCarloAI(StrongerAI):
 
         best, _ = min(enumerate(result), key=lambda x: x[1][0])
         rand = options[best]
-        # rand = random.choice(options)
         return (rand[1], rand[0] - heap)
 
 
@@ -374,7 +376,9 @@ def get_subclasses(cls):
         yield from get_subclasses(c)
 
 
-def game(player1, player2, heap=0, deck=Deck(), last_card=None):
+def game(player1, player2, heap=0, deck=None, last_card=None):
+    if deck is None:
+        deck = Deck()
     if isinstance(player1, str):
         player1 = globals()[player1](deck)
     if isinstance(player2, str):
