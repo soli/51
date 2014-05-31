@@ -3,6 +3,7 @@ import random
 import logging
 import argparse
 import sys
+import os
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -14,10 +15,15 @@ want_unicode = 0
 
 
 class Deck():
-    def __init__(self):
-        self.drawn = 0
-        self.cards = list(range(32))
-        random.shuffle(self.cards)
+    def __init__(self, cards=None):
+        if cards is None:
+            self.cards = list(range(32))
+            random.shuffle(self.cards)
+            self.drawn = 0
+        else:
+            drawn = 32 - len(cards)
+            self.cards = [0] * drawn + cards
+            self.drawn = drawn
         logging.debug('deck:\n' + str(self))
 
     def __str__(self):
@@ -216,6 +222,20 @@ class WeakAI(Player):
         return (options[0][1], options[0][0] - heap)
 
 
+class WeakerAI(WeakAI):
+    def __init__(self, unsafe_values, cards):
+        self.unsafe_values = unsafe_values
+        self.cards = cards
+
+    def select(self, heap):
+        options = self.build_options(heap)
+        self.filter_win(options)
+        self.filter_nolose(options)
+
+        rand = random.choice(options)
+        return (rand[1], rand[0] - heap)
+
+
 class StrongAI(WeakAI):
     '''Same as WeakAI but counts seen cards to find new safe plays'''
     # vs. WeakAI
@@ -239,21 +259,6 @@ class StrongAI(WeakAI):
                 self.mark_safe(v)
         elif val > 0:
             self.unsafe_values.remove(51 - val)
-
-
-class MonteCarloAI(StrongAI):
-    def build_unseen_deck(self):
-        deck = list(range(32))
-        for v in range(8):
-            for i in range(self.seen[v]):
-                deck.remove(v + 8 * i)
-        random.shuffle(deck)
-        return deck
-
-    def select(self, heap):
-        s, v = super().select(heap)
-        print(cards_to_str(self.build_unseen_deck()))
-        return s, v
 
 
 class StrongerAI(StrongAI):
@@ -302,6 +307,56 @@ class DefenseAI(StrongerAI):
         return (options[0][1], options[0][0] - heap)
 
 
+class MonteCarloAI(StrongerAI):
+    def build_unseen_deck(self):
+        deck = list(range(32))
+        for v in range(8):
+            for i in range(self.seen[v]):
+                deck.remove(v + 8 * i)
+        return deck
+
+    def select(self, heap):
+        options = self.build_options(heap)
+        self.filter_win(options)
+        self.filter_nolose(options)
+        self.filter_safe(options)
+        # only search once for each option
+        options = list(dict(options).items())
+
+        if len(options) == 1:
+            return options[0][1], options[0][0] - heap
+
+        ref_unseen = self.build_unseen_deck()
+        result = [None] * len(options)
+        for i in range(len(options)):
+            result[i] = [0, 0, 0]
+            for j in range(100):
+                unseen = ref_unseen[:]
+                random.shuffle(unseen)
+                select = options[i][1]
+                last_card = self.cards[select]
+                new_cards = self.cards[:]
+                new_cards[select] = unseen[0]
+                new_heap = options[i][0]
+                logging.debug(cards_to_str(unseen))
+                plyr1 = WeakerAI(self.unsafe_values, new_cards)
+                plyr2 = WeakerAI(self.unsafe_values, unseen[1:6])
+                logging.debug(plyr1)
+                logging.debug(plyr2)
+                with open(os.devnull, 'w') as null:
+                    old_stdout, sys.stdout = sys.stdout, null
+                    res = game(plyr1, plyr2, new_heap, Deck(unseen[6:]),
+                               last_card)
+                    sys.stdout = old_stdout
+                result[i][res] += 1
+        logging.debug(result)
+
+        best, _ = min(enumerate(result), key=lambda x: x[1][0])
+        rand = options[best]
+        # rand = random.choice(options)
+        return (rand[1], rand[0] - heap)
+
+
 def value_to_card(value):
     for i, v in enumerate(values):
         if isinstance(v, list):
@@ -319,13 +374,13 @@ def get_subclasses(cls):
         yield from get_subclasses(c)
 
 
-def game(player1, player2):
-    heap = 0
-    last_card = None
-    deck = Deck()
+def game(player1, player2, heap=0, deck=Deck(), last_card=None):
+    if isinstance(player1, str):
+        player1 = globals()[player1](deck)
+    if isinstance(player2, str):
+        player2 = globals()[player2](deck)
     # create instances corresponding to the class names given as arguments
-    players = [globals()[player1](deck),
-               globals()[player2](deck)]
+    players = [player1, player2]
     logging.debug('deck after initial draw: ' + str(deck))
 
     current = 0
