@@ -316,6 +316,9 @@ class MonteCarloAI(StrongerAI):
         return deck
 
     def select(self, heap):
+        # loses to WeakAI
+        # about 30-10-60
+
         # if heap <= 28:
         #     return super().select(heap)
 
@@ -330,8 +333,15 @@ class MonteCarloAI(StrongerAI):
             return options[0][1], options[0][0] - heap
 
         ref_unseen = self.build_unseen_deck()
+
+        # last move, safe is enough
+        if len(ref_unseen) < 8:
+            return options[0][1], options[0][0] - heap
+        # TODO if == 8 -> exhaustive search?
+
         result = [None] * len(options)
         for i in range(len(options)):
+            # will store losses, wins, draws
             result[i] = [0, 0, 0]
             new_heap = options[i][0]
             select = options[i][1]
@@ -342,8 +352,8 @@ class MonteCarloAI(StrongerAI):
                 random.shuffle(unseen)
                 new_cards[select] = unseen[0]
                 logging.debug(cards_to_str(unseen))
-                plyr1 = WeakerAI(self.unsafe_values, new_cards)
-                plyr2 = WeakerAI(self.unsafe_values, unseen[1:6])
+                plyr1 = WeakerAI(self.unsafe_values, unseen[1:6])
+                plyr2 = WeakerAI(self.unsafe_values, new_cards)
                 logging.debug(plyr1)
                 logging.debug(plyr2)
                 with open(os.devnull, 'w') as null:
@@ -352,6 +362,10 @@ class MonteCarloAI(StrongerAI):
                                last_card)
                     sys.stdout = old_stdout
                 result[i][res] += 1
+        # if len(ref_unseen) < 10 or heap > 46:
+        #     print(options)
+        #     print(result)
+        #     print(cards_to_str(ref_unseen))
         logging.debug(result)
 
         best, _ = min(enumerate(result), key=lambda x: x[1][0])
