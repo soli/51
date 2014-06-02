@@ -4,6 +4,7 @@ import logging
 import argparse
 import sys
 import os
+import math
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -307,7 +308,7 @@ class DefenseAI(StrongerAI):
         return (options[0][1], options[0][0] - heap)
 
 
-class MonteCarloAI(StrongerAI):
+class MonteCarloAI(DefenseAI):
     def build_unseen_deck(self):
         deck = list(range(32))
         for v in range(8):
@@ -316,16 +317,16 @@ class MonteCarloAI(StrongerAI):
         return deck
 
     def select(self, heap):
-        # loses to WeakAI
-        # about 30-10-60
-
-        # if heap <= 28:
-        #     return super().select(heap)
+        # vs. StrongAI w/ totalsim = 500
+        # with <=35 about 26-33-41
+        # with <=28 about 27-35-38
+        if heap <= 28:
+            return super().select(heap)
 
         options = self.build_options(heap)
         self.filter_win(options)
         self.filter_nolose(options)
-        self.filter_safe(options)
+
         # only search once for each option
         options = list(dict(options).items())
 
@@ -336,41 +337,60 @@ class MonteCarloAI(StrongerAI):
 
         # last move, safe is enough
         if len(ref_unseen) < 8:
+            self.filter_safe(options)
             return options[0][1], options[0][0] - heap
         # TODO if == 8 -> exhaustive search?
 
-        result = [None] * len(options)
-        for i in range(len(options)):
-            # will store losses, wins, draws
-            result[i] = [0, 0, 0]
+        # will store losses, wins, draws, total
+        nopt = len(options)
+        result = [None] * nopt
+        for i in range(nopt):
+            result[i] = [0, 0, 0, 1]
+        totalsim = 500
+        # http://en.wikipedia.org/wiki/Monte-Carlo_tree_search
+        for t in range(totalsim):
+            scores = [(k, (result[k][1] + result[k][2])/result[k][3] +
+                       math.sqrt(2 * math.log(t + 1) / result[k][3])) for k in
+                      range(nopt)]
+            logging.debug(result)
+            logging.debug(scores)
+            i, _ = max(scores, key=lambda x: x[1])
             new_heap = options[i][0]
             select = options[i][1]
             last_card = self.cards[select]
             new_cards = self.cards[:]
-            for j in range(100):
-                unseen = ref_unseen[:]
-                random.shuffle(unseen)
-                new_cards[select] = unseen[0]
-                logging.debug(cards_to_str(unseen))
-                plyr1 = WeakerAI(self.unsafe_values, unseen[1:6])
-                plyr2 = WeakerAI(self.unsafe_values, new_cards)
-                logging.debug(plyr1)
-                logging.debug(plyr2)
-                with open(os.devnull, 'w') as null:
-                    old_stdout, sys.stdout = sys.stdout, null
-                    res = game(plyr1, plyr2, new_heap, Deck(unseen[6:]),
-                               last_card)
-                    sys.stdout = old_stdout
-                result[i][res] += 1
-        # if len(ref_unseen) < 10 or heap > 46:
+            res = run_play_out(ref_unseen, self.unsafe_values,
+                               new_heap, new_cards, last_card, select)
+            result[i][res] += 1
+            result[i][3] += 1
+
+        # if len(ref_unseen) < 10 or heap > 40:
         #     print(options)
         #     print(result)
         #     print(cards_to_str(ref_unseen))
         logging.debug(result)
 
-        best, _ = min(enumerate(result), key=lambda x: x[1][0])
+        best, _ = min(enumerate(result), key=lambda x: x[1][0] / x[1][3])
         rand = options[best]
         return (rand[1], rand[0] - heap)
+
+
+def run_play_out(ref_unseen, ref_unsafe, new_heap, new_cards, last_card,
+                 select):
+    unseen = ref_unseen[:]
+    random.shuffle(unseen)
+    new_cards[select] = unseen[0]
+    logging.debug(cards_to_str(unseen))
+    plyr1 = WeakerAI(ref_unsafe, unseen[1:6])
+    plyr2 = WeakerAI(ref_unsafe, new_cards)
+    logging.debug(plyr1)
+    logging.debug(plyr2)
+    with open(os.devnull, 'w') as null:
+        old_stdout, sys.stdout = sys.stdout, null
+        res = game(plyr1, plyr2, new_heap, Deck(unseen[6:]),
+                   last_card)
+        sys.stdout = old_stdout
+    return res
 
 
 def value_to_card(value):
