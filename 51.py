@@ -140,18 +140,6 @@ class WeakAI(Player):
         # self.unsafe_values.sort(reverse=True)
         # assert self.unsafe_values == [50, 49, 48, 47, 44, 43, 41, 40]
 
-    def build_options(self, heap):
-        options = []
-        for select in range(NCARDS):
-            val = values[self.cards[select] % 8]
-            if isinstance(val, list):
-                options.extend([(v + heap, select) for v in val])
-            else:
-                options.append((val + heap, select))
-        logging.debug('full hand: ' + str(self))
-        logging.debug('corresponding options: ' + str(options))
-        return options
-
     def filter_options(self, options, func):
         filtered = [(k, v) for k, v in options if func(k, v)]
         if filtered:
@@ -196,7 +184,7 @@ class WeakAI(Player):
         # about 35-45-20
         # - without filter_duplicates()
         # about 20-26-54
-        options = self.build_options(heap)
+        options = build_options(self.cards, heap)
 
         # can we win?
         self.filter_win(options)
@@ -229,7 +217,7 @@ class WeakerAI(WeakAI):
         self.cards = cards
 
     def select(self, heap):
-        options = self.build_options(heap)
+        options = build_options(self.cards, heap)
         self.filter_win(options)
         self.filter_nolose(options)
 
@@ -294,7 +282,7 @@ class DefenseAI(StrongerAI):
 
     def select(self, heap):
         '''Same as WeakAI but try to keep 9s and Ts'''
-        options = self.build_options(heap)
+        options = build_options(self.cards, heap)
         self.filter_win(options)
         self.filter_nolose(options)
         self.filter_safe(options)
@@ -323,7 +311,7 @@ class MonteCarloAI(DefenseAI):
         if heap <= 28:
             return super().select(heap)
 
-        options = self.build_options(heap)
+        options = build_options(self.cards, heap)
         self.filter_win(options)
         self.filter_nolose(options)
 
@@ -341,7 +329,7 @@ class MonteCarloAI(DefenseAI):
             return options[0][1], options[0][0] - heap
         # TODO if == 8 -> exhaustive search?
 
-        # will store losses, wins, draws, total
+        # will store losses, wins, draws, total + 1
         nopt = len(options)
         result = [None] * nopt
         for i in range(nopt):
@@ -375,6 +363,19 @@ class MonteCarloAI(DefenseAI):
         return (rand[1], rand[0] - heap)
 
 
+def build_options(cards, heap):
+    options = []
+    for select in range(NCARDS):
+        val = values[cards[select] % 8]
+        if isinstance(val, list):
+            options.extend([(v + heap, select) for v in val])
+        else:
+            options.append((val + heap, select))
+    logging.debug('full hand: ' + str(cards))
+    logging.debug('corresponding options: ' + str(options))
+    return options
+
+
 def run_play_out(ref_unseen, ref_unsafe, new_heap, new_cards, last_card,
                  select):
     unseen = ref_unseen[:]
@@ -391,6 +392,63 @@ def run_play_out(ref_unseen, ref_unsafe, new_heap, new_cards, last_card,
                    last_card)
         sys.stdout = old_stdout
     return res
+
+
+def exhaustive_search(hand, unseen, heap):
+    print('exhaustive')
+    print(heap)
+    print(hand)
+    options = build_options(hand, heap)
+    # loss win draw
+    result = [None] * len(options)
+    seen = {}
+    for i, (option, c) in enumerate(options):
+        if option in seen:
+            print('already seen')
+            result[i] = result[seen[option]]
+        else:
+            seen[option] = i
+            result[i] = [0, 0, 0]
+            new_hand = hand[:c] + hand[(c + 1):]
+            print(option)
+            print(new_hand)
+
+            if option == 51:
+                result[i][1] += 1
+                print(result[i])
+            elif option > 51:
+                result[i][0] += 1
+            elif len(unseen) < 2:
+                result[i][2] += 1
+            else:
+                for new_card in unseen:
+                    for opp_card in unseen:
+                        if opp_card == new_card:
+                            continue
+                        opp_vals = values[opp_card % 8]
+                        if not isinstance(opp_vals, list):
+                            opp_vals = [opp_vals]
+                            for opp_val in opp_vals:
+                                new_heap = option + opp_val
+                                if new_heap == 51:
+                                    result[i][0] += 1
+                                elif new_heap > 51:
+                                    result[i][1] += 1
+                                elif len(unseen) < 3:
+                                    result[i][2] += 1
+                                else:
+                                    opp_unseen = unseen[:]
+                                    opp_unseen.remove(opp_card)
+                                    opp_unseen.remove(new_card)
+                                    opp_hand = new_hand[:]
+                                    opp_hand.append(new_card)
+                                    result[i] = list(map(
+                                        sum,
+                                        zip(result[i],
+                                            *exhaustive_search(opp_hand,
+                                                               opp_unseen,
+                                                               new_heap))))
+    return result
 
 
 def value_to_card(value):
@@ -479,4 +537,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    print(exhaustive_search([0, 0, 1, 1, 2], [4, 5, 6], 44))
