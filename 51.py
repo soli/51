@@ -395,27 +395,24 @@ def run_play_out(ref_unseen, ref_unsafe, new_heap, new_cards, last_card,
 
 
 def exhaustive_search(hand, unseen, heap):
-    print('exhaustive')
-    print(heap)
-    print(hand)
+    logging.debug(heap)
+    logging.debug(hand)
     options = build_options(hand, heap)
     # loss win draw
     result = [None] * len(options)
     seen = {}
     for i, (option, c) in enumerate(options):
         if option in seen:
-            print('already seen')
             result[i] = result[seen[option]]
         else:
             seen[option] = i
             result[i] = [0, 0, 0]
             new_hand = hand[:c] + hand[(c + 1):]
-            print(option)
-            print(new_hand)
+            logging.debug(option)
+            logging.debug(new_hand)
 
             if option == 51:
                 result[i][1] += 1
-                print(result[i])
             elif option > 51:
                 result[i][0] += 1
             elif len(unseen) < 2:
@@ -442,13 +439,27 @@ def exhaustive_search(hand, unseen, heap):
                                     opp_unseen.remove(new_card)
                                     opp_hand = new_hand[:]
                                     opp_hand.append(new_card)
+                                    best = best_option_from_lwd(
+                                        exhaustive_search(opp_hand,
+                                                          opp_unseen,
+                                                          new_heap))
+                                    logging.debug(best)
                                     result[i] = list(map(
                                         sum,
-                                        zip(result[i],
-                                            *exhaustive_search(opp_hand,
-                                                               opp_unseen,
-                                                               new_heap))))
+                                        zip(result[i], best)))
+
     return result
+
+
+def best_option_from_lwd(lwds):
+    logging.debug(lwds)
+    winning = [lwd for lwd in lwds if lwd[0] == 0 and lwd[2] == 0]
+    if winning:
+        return [0, 1, 0]
+    not_losing = [lwd for lwd in lwds if lwd[0] == 0]
+    if not_losing:
+        return(max(not_losing, key=lambda x: x[1]/(x[1] + x[2])))
+    return(max(lwds, key=lambda x: (x[1] + x[2])/(x[1] + x[2] + x[3])))
 
 
 def value_to_card(value):
