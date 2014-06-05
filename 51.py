@@ -5,6 +5,7 @@ import argparse
 import sys
 import os
 import math
+import time
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -327,7 +328,19 @@ class MonteCarloAI(DefenseAI):
         if len(ref_unseen) < 8:
             self.filter_safe(options)
             return options[0][1], options[0][0] - heap
-        # TODO if == 8 -> exhaustive search?
+        if len(ref_unseen) == 8:
+            print('exhaustive')
+            print(cards_to_str(self.cards))
+            t1 = time.perf_counter()
+            result = exhaustive_search(self.cards, ref_unseen, heap)
+            print(result)
+            best = best_option_from_lwd(result)
+            best_index = result.index(best)
+            print(best_index)
+            t2 = time.perf_counter()
+            print(t2 - t1)
+            options = build_options(self.cards, heap)
+            return options[best_index][1], options[best_index][0] - heap
 
         # will store losses, wins, draws, total + 1
         nopt = len(options)
@@ -335,9 +348,10 @@ class MonteCarloAI(DefenseAI):
         for i in range(nopt):
             result[i] = [0, 0, 0, 1]
         totalsim = 500
+        draw_weight = 0.9
         # http://en.wikipedia.org/wiki/Monte-Carlo_tree_search
         for t in range(totalsim):
-            scores = [(k, (result[k][1] + result[k][2])/result[k][3] +
+            scores = [(k, score_lwd(result[k], draw_weight) +
                        math.sqrt(2 * math.log(t + 1) / result[k][3])) for k in
                       range(nopt)]
             logging.debug(result)
@@ -358,7 +372,9 @@ class MonteCarloAI(DefenseAI):
         #     print(cards_to_str(ref_unseen))
         logging.debug(result)
 
-        best, _ = min(enumerate(result), key=lambda x: x[1][0] / x[1][3])
+        # much worse results with weight 0.5, slightly worse with -1
+        best, _ = max(enumerate(result), key=lambda x:
+                      score_lwd(x[1], draw_weight))
         rand = options[best]
         return (rand[1], rand[0] - heap)
 
@@ -412,54 +428,79 @@ def exhaustive_search(hand, unseen, heap):
             logging.debug(new_hand)
 
             if option == 51:
-                result[i][1] += 1
+                result[i] = [0, 1, 0]
             elif option > 51:
-                result[i][0] += 1
-            elif len(unseen) < 2:
-                result[i][2] += 1
+                result[i] = [1, 0, 0]
+            elif len(unseen) < 7:
+                result[i] = [0, 0, 1]
             else:
-                for new_card in unseen:
-                    for opp_card in unseen:
-                        if opp_card == new_card:
-                            continue
-                        opp_vals = values[opp_card % 8]
-                        if not isinstance(opp_vals, list):
-                            opp_vals = [opp_vals]
-                            for opp_val in opp_vals:
-                                new_heap = option + opp_val
-                                if new_heap == 51:
-                                    result[i][0] += 1
-                                elif new_heap > 51:
-                                    result[i][1] += 1
-                                elif len(unseen) < 3:
-                                    result[i][2] += 1
-                                else:
-                                    opp_unseen = unseen[:]
-                                    opp_unseen.remove(opp_card)
-                                    opp_unseen.remove(new_card)
-                                    opp_hand = new_hand[:]
-                                    opp_hand.append(new_card)
-                                    best = best_option_from_lwd(
-                                        exhaustive_search(opp_hand,
-                                                          opp_unseen,
-                                                          new_heap))
-                                    logging.debug(best)
-                                    result[i] = list(map(
-                                        sum,
-                                        zip(result[i], best)))
+                result[i] = exhaustive_search_opp(
+                    option, unseen, heap, new_hand)
 
     return result
 
 
-def best_option_from_lwd(lwds):
+def exhaustive_search_opp(option, unseen, heap, new_hand):
+    result = [0, 0, 0]
+    # pick a drawn card for active player
+    for new_card in unseen:
+        # pick a different card to be played by opponent
+        for opp_card in unseen:
+            if opp_card == new_card:
+                continue
+            opp_vals = values[opp_card % 8]
+            if not isinstance(opp_vals, list):
+                opp_vals = [opp_vals]
+            # sum all results
+            for opp_val in opp_vals:
+                new_heap = option + opp_val
+                if new_heap == 51:
+                    result[0] += 1
+                elif new_heap > 51:
+                    result[1] += 1
+                elif len(unseen) < 8:
+                    result[2] += 1
+                else:
+                    opp_unseen = unseen[:]
+                    opp_unseen.remove(opp_card)
+                    opp_unseen.remove(new_card)
+                    opp_hand = new_hand[:]
+                    opp_hand.append(new_card)
+                    best = best_option_from_lwd(
+                        exhaustive_search(opp_hand,
+                                          opp_unseen,
+                                          new_heap))
+                    logging.debug(best)
+                    result = list(map(sum, zip(result, best)))
+
+    # normalize
+    total = sum(result)
+    if total > 0:
+        result = [r / total for r in result]
+
+    return result
+
+
+def best_option_from_lwd(lwds, draw_weight=0.9):
     logging.debug(lwds)
-    winning = [lwd for lwd in lwds if lwd[0] == 0 and lwd[2] == 0]
-    if winning:
-        return [0, 1, 0]
-    not_losing = [lwd for lwd in lwds if lwd[0] == 0]
-    if not_losing:
-        return(max(not_losing, key=lambda x: x[1]/(x[1] + x[2])))
-    return(max(lwds, key=lambda x: (x[1] + x[2])/(x[1] + x[2] + x[3])))
+    # k = 0.5 arbitrary...
+    return(max(lwds, key=lambda x: score_lwd(x, draw_weight)))
+
+
+def score_lwd(lwd, k):
+    if len(lwd) > 3:
+        total = lwd[3]
+    else:
+        total = sum(lwd[:3])
+    if total == 0:
+        return 0.5
+    # ignore draws
+    if k < 0:
+        if lwd[1] == 0:
+            return 0
+        return lwd[1] / (lwd[0] + lwd[1])
+    else:
+        return (lwd[1] + k * lwd[2]) / total
 
 
 def value_to_card(value):
@@ -548,5 +589,5 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    print(exhaustive_search([0, 0, 1, 1, 2], [4, 5, 6], 44))
+    main()
+    # print(exhaustive_search([0, 0, 1, 1, 2], [4, 5, 6], 44))
