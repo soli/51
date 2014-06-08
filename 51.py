@@ -3,8 +3,8 @@ import random
 import logging
 import argparse
 import sys
-import os
 import math
+import time
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -68,17 +68,18 @@ class Player():
     def __str__(self):
         return cards_to_str(self.cards)
 
-    def play(self, heap, last_card, new):
+    def play(self, heap, last_card, new, do_print=True):
         if last_card is not None:
             self.mark_seen(last_card)
-        logging.debug('hand before play: ' + str(self))
+        # logging.debug('hand before play: ' + str(self))
         select, val = self.select(heap)
         card, self.cards[select] = self.cards[select], new
-        logging.debug('hand after play: ' + str(self))
+        # logging.debug('hand after play: ' + str(self))
         self.mark_seen(new)
-        print(card_to_str(card), end=' ')   # noqa
-        print(heap + val)
-        print()
+        if do_print:
+            print(card_to_str(card), end=' ')   # noqa
+            print(heap + val)
+            print()
         return heap + val, card
 
     def select(self, heap):
@@ -309,9 +310,9 @@ class MonteCarloAI(DefenseAI):
 
     def select(self, heap):
         # vs. StrongAI w/ totalsim = 500
-        # with <=35 about 26-33-41
-        # with <=28 about 27-35-38
-        if heap <= 28:
+        # without <= 20 34-21-45
+        # about 32-38-30
+        if heap <= 20:
             return super().select(heap)
 
         options = build_options(self.cards, heap)
@@ -330,8 +331,13 @@ class MonteCarloAI(DefenseAI):
         if len(ref_unseen) < 8:
             self.filter_safe(options)
             return options[0][1], options[0][0] - heap
-        if len(ref_unseen) < 10 or (len(ref_unseen) == 10 and heap > 41):
+        if len(ref_unseen) < 10 or (len(ref_unseen) == 10 and heap > 42):
+            t1 = time.perf_counter()
             result = exhaustive_search(self.cards, ref_unseen, heap)
+            t2 = time.perf_counter()
+            t = t2 - t1
+            # print('exhaustive')
+            # print(t)
             best = best_option_from_lwd(result)
             best_index = result.index(best)
             options = build_options(self.cards, heap)
@@ -342,32 +348,31 @@ class MonteCarloAI(DefenseAI):
         result = [None] * nopt
         for i in range(nopt):
             result[i] = [0, 0, 0, 1]
-        totalsim = 500
+        totalsim = 1000
+        # much worse results with weight 0.5, slightly worse with -1
         draw_weight = 0.9
+
+        t1 = time.perf_counter()
         # http://en.wikipedia.org/wiki/Monte-Carlo_tree_search
         for t in range(totalsim):
             scores = [(k, score_lwd(result[k], draw_weight) +
                        math.sqrt(2 * math.log(t + 1) / result[k][3])) for k in
                       range(nopt)]
-            logging.debug(result)
-            logging.debug(scores)
+            # logging.debug(result)
+            # logging.debug(scores)
             i, _ = max(scores, key=lambda x: x[1])
             new_heap = options[i][0]
             select = options[i][1]
             last_card = self.cards[select]
-            new_cards = self.cards[:]
             res = run_play_out(ref_unseen, self.unsafe_values,
-                               new_heap, new_cards, last_card, select)
+                               new_heap, self.cards, last_card, select)
             result[i][res] += 1
             result[i][3] += 1
-
-        # if len(ref_unseen) < 10 or heap > 40:
-        #     print(options)
-        #     print(result)
-        #     print(cards_to_str(ref_unseen))
         logging.debug(result)
 
-        # much worse results with weight 0.5, slightly worse with -1
+        t2 = time.perf_counter()
+        # print(t2 - t1)
+
         best, _ = max(enumerate(result), key=lambda x:
                       score_lwd(x[1], draw_weight))
         rand = options[best]
@@ -387,27 +392,23 @@ def build_options(cards, heap):
     return options
 
 
-def run_play_out(ref_unseen, ref_unsafe, new_heap, new_cards, last_card,
+def run_play_out(ref_unseen, ref_unsafe, new_heap, ref_cards, last_card,
                  select):
     unseen = ref_unseen[:]
+    new_cards = ref_cards[:]
     random.shuffle(unseen)
     new_cards[select] = unseen[0]
-    logging.debug(cards_to_str(unseen))
+    # logging.debug(cards_to_str(unseen))
     plyr1 = WeakerAI(ref_unsafe, unseen[1:6])
     plyr2 = WeakerAI(ref_unsafe, new_cards)
-    logging.debug(plyr1)
-    logging.debug(plyr2)
-    with open(os.devnull, 'w') as null:
-        old_stdout, sys.stdout = sys.stdout, null
-        res = game(plyr1, plyr2, new_heap, Deck(unseen[6:]),
-                   last_card)
-        sys.stdout = old_stdout
-    return res
+    # logging.debug(plyr1)
+    # logging.debug(plyr2)
+    return game(plyr1, plyr2, new_heap, Deck(unseen[6:]), last_card, False)
 
 
 def exhaustive_search(hand, unseen, heap):
-    logging.debug(heap)
-    logging.debug(hand)
+    # logging.debug(heap)
+    # logging.debug(hand)
     options = build_options(hand, heap)
     # loss win draw
     result = [None] * len(options)
@@ -419,8 +420,8 @@ def exhaustive_search(hand, unseen, heap):
             seen[option] = i
             result[i] = [0, 0, 0]
             new_hand = hand[:c] + hand[(c + 1):]
-            logging.debug(option)
-            logging.debug(new_hand)
+            # logging.debug(option)
+            # logging.debug(new_hand)
 
             if option == 51:
                 result[i] = [0, 1, 0]
@@ -465,7 +466,7 @@ def exhaustive_search_opp(option, unseen, heap, new_hand):
                         exhaustive_search(opp_hand,
                                           opp_unseen,
                                           new_heap))
-                    logging.debug(best)
+                    # logging.debug(best)
                     result = list(map(sum, zip(result, best)))
 
     # normalize
@@ -477,7 +478,7 @@ def exhaustive_search_opp(option, unseen, heap, new_hand):
 
 
 def best_option_from_lwd(lwds, draw_weight=0.9):
-    logging.debug(lwds)
+    # logging.debug(lwds)
     # k = 0.5 arbitrary...
     return(max(lwds, key=lambda x: score_lwd(x, draw_weight)))
 
@@ -515,7 +516,7 @@ def get_subclasses(cls):
         yield from get_subclasses(c)
 
 
-def game(player1, player2, heap=0, deck=None, last_card=None):
+def game(player1, player2, heap=0, deck=None, last_card=None, do_print=True):
     if deck is None:
         deck = Deck()
     if isinstance(player1, str):
@@ -524,20 +525,24 @@ def game(player1, player2, heap=0, deck=None, last_card=None):
         player2 = globals()[player2](deck)
     # create instances corresponding to the class names given as arguments
     players = [player1, player2]
-    logging.debug('deck after initial draw: ' + str(deck))
+    # logging.debug('deck after initial draw: ' + str(deck))
 
     current = 0
     while deck.drawn < 32 and heap < 51:
-        heap, last_card = players[current].play(heap, last_card, deck.draw(1))
+        heap, last_card = players[current].play(heap, last_card, deck.draw(1),
+                                                do_print)
         current = (current + 1) % 2
     last_player = (current - 1) % 2 + 1
     if heap == 51:
-        print('player ' + str(last_player) + ' has won')
+        if do_print:
+            print('player ' + str(last_player) + ' has won')
         return 1 - current
     if heap > 51:
-        print('player ' + str(last_player) + ' has lost')
+        if do_print:
+            print('player ' + str(last_player) + ' has lost')
         return current
-    print('deck is empty, game is a draw')
+    if do_print:
+        print('deck is empty, game is a draw')
     return 2
 
 
@@ -563,10 +568,13 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
 
     if 'Human' in args.players:
+        do_print = True
         print('Cards\' values:')
         print('7 = 7, 8 = 8, 9 = 0, T = 10 or -10, J = 2, Q = 3, K = 4, ' +
               'A = 1 or 11')
         print()
+    else:
+        do_print = False
 
     global want_unicode
     want_unicode = args.unicode
@@ -574,7 +582,7 @@ def main():
     won = [0, 0, 0]
     for i in range(args.count):
         j = i % 2
-        result = game(args.players[j], args.players[1 - j])
+        result = game(args.players[j], args.players[1 - j], do_print=do_print)
         if result < 2 and j == 1:
             result = 1 - result
         won[result] += 1
