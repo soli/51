@@ -212,9 +212,12 @@ class WeakAI(Player):
 
 
 class WeakerAI(WeakAI):
-    def __init__(self, unsafe_values, cards):
-        self.unsafe_values = unsafe_values
-        self.cards = cards
+    def __init__(self, unsafe_values=None, cards=None):
+        if cards is None and isinstance(unsafe_values, Deck):
+            super().__init__(unsafe_values)
+        else:
+            self.unsafe_values = unsafe_values
+            self.cards = cards
 
     def select(self, heap):
         options = build_options(self.cards, heap)
