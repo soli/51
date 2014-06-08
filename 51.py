@@ -5,7 +5,6 @@ import argparse
 import sys
 import os
 import math
-import time
 
 
 faces = ['7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -328,17 +327,10 @@ class MonteCarloAI(DefenseAI):
         if len(ref_unseen) < 8:
             self.filter_safe(options)
             return options[0][1], options[0][0] - heap
-        if len(ref_unseen) == 8:
-            print('exhaustive')
-            print(cards_to_str(self.cards))
-            t1 = time.perf_counter()
+        if len(ref_unseen) < 10 or (len(ref_unseen) == 10 and heap > 41):
             result = exhaustive_search(self.cards, ref_unseen, heap)
-            print(result)
             best = best_option_from_lwd(result)
             best_index = result.index(best)
-            print(best_index)
-            t2 = time.perf_counter()
-            print(t2 - t1)
             options = build_options(self.cards, heap)
             return options[best_index][1], options[best_index][0] - heap
 
@@ -590,4 +582,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # print(exhaustive_search([0, 0, 1, 1, 2], [4, 5, 6], 44))
+    # print(exhaustive_search([0, 0, 1, 1, 2],
+    #                         [4, 12, 5, 20, 13, 6, 14, 7], 44))
